@@ -1,0 +1,501 @@
+{
+  "protocol_name": "UNIVERSAL DATASET-MODEL UTILIZATION PROTOCOL",
+  "protocol_version": "4.23-DRAFT",
+  "refactor_date": "2026-01-10",
+  "refactor_note": "REGIME-SCOPED SEMANTIC SPLIT POLICY: Adds DOCUMENT_CLASS declaration (PROSE vs LEGAL_REGULATORY). Semantic split thresholds: PROSE=5%, LEGAL_REGULATORY=10%. Clarifies that 'sentence boundary' was a proxy for semantic coherence, not literal punctuation. SEC filings and legal documents use clause/paragraph units.",
+
+  "SECTION_A__PROTOCOL_KERNEL": {
+    "_section_purpose": "Immutable laws that MUST be enforced. This section can be read alone to enforce correct behavior.",
+    "_rule_type": "ALL NORMATIVE - Enforceable without exception",
+
+    "KERNEL_01__ACCEPTANCE_STANDARD": {
+      "type": "NORMATIVE",
+      "statement": "ONLY GREEN STATUS IS ACCEPTABLE FOR PRODUCTION DEPLOYMENT",
+      "MUST": [
+        "Achieve GREEN status before any production deployment",
+        "Rebuild non-GREEN indices until GREEN is achieved",
+        "Include immediate corrective rebuild plan for any non-GREEN IDA analysis"
+      ],
+      "MUST_NOT": [
+        "Deploy YELLOW, ORANGE, or RED status indices to production",
+        "Use ACCEPT_WITH_NOTES for non-GREEN status",
+        "Accept partial compliance or degraded-but-usable status"
+      ],
+      "enforcement": {
+        "GREEN": "ACCEPTABLE - the ONLY status that permits deployment",
+        "YELLOW": "UNACCEPTABLE - triggers MANDATORY FULL_BUILD_FROM_RAW",
+        "ORANGE": "UNACCEPTABLE - triggers MANDATORY FULL_BUILD_FROM_RAW",
+        "RED": "UNACCEPTABLE - triggers MANDATORY FULL_BUILD_FROM_RAW"
+      }
+    },
+
+    "KERNEL_02__EMBEDDING_MODEL_INVARIANT": {
+      "type": "NORMATIVE",
+      "statement": "Embedding model and dimension are FIXED and NON-NEGOTIABLE",
+      "MUST": [
+        "Use intfloat/e5-large-v2 as embedding model",
+        "Use dimension 1024 (fixed)",
+        "Use FP16 precision",
+        "Use batch_size = 1300 as TARGET for REGIME_SHORT (see TOKEN_LENGTH_REGIME_BATCH_POLICY)",
+        "Apply prefix 'passage:' for documents, 'query:' for queries",
+        "Normalize embeddings"
+      ],
+      "MUST_NOT": [
+        "Change embedding model without full rebuild",
+        "Mix embeddings from different models in same index",
+        "Use dimension other than 1024"
+      ],
+      "_v4.23_clarification": "batch_size=1300 is the LOCKED TARGET for REGIME_SHORT. For REGIME_MEDIUM and REGIME_LONG, see TOKEN_LENGTH_REGIME_BATCH_POLICY in SECTION_C."
+    },
+
+    "KERNEL_03__ALIGNMENT_INVARIANT": {
+      "type": "NORMATIVE",
+      "statement": "Vector-Chunk-Metadata alignment is IMMUTABLE 1:1:1",
+      "MUST": [
+        "Maintain exact 1:1:1 alignment between vectors, chunks, and metadata",
+        "Verify alignment before declaring any status",
+        "Trace metadata paths back to raw source paths"
+      ],
+      "MUST_NOT": [
+        "Allow count mismatches between vectors, chunks, and metadata",
+        "Deploy indices with broken alignment"
+      ],
+      "mismatch_consequence": "automatic ORANGE or RED status"
+    },
+
+    "KERNEL_04__SEMANTIC_BOUNDARY_CHUNKING": {
+      "type": "NORMATIVE",
+      "statement": "All text chunking MUST preserve SEMANTIC UNIT boundaries",
+      "_v4.23_revision": "Renamed from SENTENCE_BOUNDARY_CHUNKING. 'Sentence' was a proxy for semantic coherence, not a literal punctuation rule.",
+      "semantic_unit_definitions": {
+        "PROSE_DOCUMENTS": "Sentence = semantic unit. Terminal punctuation (. ! ?) + whitespace + capital letter.",
+        "LEGAL_REGULATORY_DOCUMENTS": "Clause/paragraph/list item = semantic unit. Structural markers, numbering, semicolons."
+      },
+      "MUST": [
+        "Declare DOCUMENT_CLASS (PROSE or LEGAL_REGULATORY) before processing",
+        "Use semantic-unit-aware detection appropriate to document class",
+        "Aggregate semantic units into chunks respecting size limits",
+        "Apply regime-specific thresholds (see KERNEL_16)"
+      ],
+      "MUST_NOT": [
+        "Use fixed character count truncation",
+        "Use fixed token count truncation without semantic boundary",
+        "Use arbitrary byte offset splitting",
+        "Split mid-word",
+        "Apply PROSE thresholds to LEGAL_REGULATORY documents"
+      ],
+      "quality_thresholds": {
+        "_note": "Semantic split thresholds now regime-scoped. See KERNEL_16.",
+        "mid_word_breaks_max": "1% (all document classes)",
+        "self_contained_chunks_min": "90%",
+        "retrieval_usability_min": "95%"
+      }
+    },
+
+    "KERNEL_05__DATASET_CONCURRENCY": {
+      "type": "NORMATIVE",
+      "statement": "ONLY ONE DATASET MAY BE ACTIVELY PROCESSING AT A TIME",
+      "MUST": [
+        "Atomically create lock with dataset_id, run_id, PIDs on start",
+        "Delete lock on clean exit",
+        "Present recovery instructions if lock exists from crash"
+      ],
+      "MUST_NOT": [
+        "Process multiple datasets simultaneously",
+        "Override existing lock without explicit operator approval"
+      ]
+    },
+
+    "KERNEL_06__WORKER_DEFINITION": {
+      "type": "NORMATIVE",
+      "statement": "A WORKER is a GPU EMBEDDING PROCESS - no other interpretation is valid",
+      "MUST": [
+        "Each worker loads its own e5-large-v2 model instance",
+        "Each worker performs GPU embedding",
+        "Each worker operates within 1-3GB VRAM budget"
+      ],
+      "MUST_NOT": [
+        "Interpret worker as CPU-only process",
+        "Interpret worker as producer-only or queue-only process",
+        "Share GPU model between workers"
+      ]
+    },
+
+    "KERNEL_07__DRY_RUN_GATE": {
+      "type": "NORMATIVE",
+      "statement": "FULL_BUILD_FROM_RAW is FORBIDDEN without prior DRY_RUN_PASS artifact",
+      "MUST": [
+        "Complete DRY_RUN_ONLY before FULL_BUILD_FROM_RAW",
+        "Produce DRY_RUN_PASS artifact documenting successful dry run",
+        "Process minimum 2 parquet files OR 2,000 documents in dry run"
+      ],
+      "MUST_NOT": [
+        "Bypass dry run requirement",
+        "Override this gate (no waiver allowed)"
+      ],
+      "trigger_conditions": [
+        "New or modified chunker introduced",
+        "Gate-0 logic modified, relaxed, or reparameterized",
+        "Dataset has historical silent failure, abandoned run, or zero-shard execution",
+        "Projected chunk count exceeds 1,000,000"
+      ]
+    },
+
+    "KERNEL_08__PRE_EXECUTION_SEMANTIC_VETO": {
+      "type": "NORMATIVE",
+      "statement": "Execution BLOCKED if pre-GPU validation detects quality gate failure",
+      "_v4.23_revision": "Thresholds now regime-scoped per KERNEL_16.",
+      "MUST": [
+        "Sample first 10,000 chunks before GPU embedding begins",
+        "Declare TOKEN_LENGTH_REGIME and DOCUMENT_CLASS",
+        "Calculate mid-semantic-unit and mid-word break rates",
+        "ABORT if violation rate exceeds regime-specific threshold (KERNEL_16)"
+      ],
+      "MUST_NOT": [
+        "Proceed to GPU embedding if veto triggered",
+        "Override this veto (no exceptions)",
+        "Use global thresholds without regime declaration"
+      ],
+      "thresholds": {
+        "_note": "See KERNEL_16 SEMANTIC_SPLIT_THRESHOLDS for regime-specific values",
+        "mid_word_break_max": 0.01
+      }
+    },
+
+    "KERNEL_09__RESOURCE_EFFICIENCY": {
+      "type": "NORMATIVE",
+      "statement": "ALL tasks MUST be executed with RAM/VRAM/CPU efficiency",
+      "MUST": [
+        "Use streaming for all large data operations",
+        "Use bounded queues with backpressure",
+        "Delete large objects immediately after use",
+        "Limit single process to max 50% system RAM"
+      ],
+      "MUST_NOT": [
+        "Load entire datasets into RAM at once",
+        "Use unbounded queues",
+        "Precompute all results before any output",
+        "Keep multiple copies of same data in RAM"
+      ]
+    },
+
+    "KERNEL_10__PROCESS_HYGIENE": {
+      "type": "NORMATIVE",
+      "statement": "ALL spawned processes MUST be killed when abandoning an approach",
+      "MUST": [
+        "Kill all processes from abandoned approach before starting new one",
+        "Verify processes are terminated with ps aux check",
+        "Release GPU memory (verify with nvidia-smi)"
+      ],
+      "MUST_NOT": [
+        "Leave zombie processes running",
+        "Use python3 universal kill commands",
+        "Proceed without verifying clean state"
+      ]
+    },
+
+    "KERNEL_11__CHECKPOINT_POLICY": {
+      "type": "NORMATIVE",
+      "statement": "Checkpointing MUST use delta-threshold algorithm, not modulo",
+      "MUST": [
+        "Checkpoint when (total_vectors - last_checkpoint_total) >= interval",
+        "Checkpoint every 5 minutes regardless of vector count",
+        "Checkpoint on shard flush, signal received, and clean exit",
+        "Record committed_vectors, in_memory_buffer, and checkpoint_time"
+      ],
+      "MUST_NOT": [
+        "Use modulo-based checkpointing (total % interval == 0)",
+        "Resume without verifying checkpoint against disk state"
+      ]
+    },
+
+    "KERNEL_12__PHASE_2_INDEX_BUILD": {
+      "type": "NORMATIVE",
+      "statement": "Monolithic RAM loading for FAISS index build is FORBIDDEN for >= 20M vectors",
+      "MUST": [
+        "Use incremental shard ingestion for large indices",
+        "Load N shards at a time, add to index, free memory before next batch",
+        "Verify index.ntotal == sum of all shard vector counts"
+      ],
+      "MUST_NOT": [
+        "Load all shard arrays into memory simultaneously before index.add()",
+        "Use np.vstack() or concatenate() on all shards at once"
+      ]
+    },
+
+    "KERNEL_13__OPTIMIZATION_HIERARCHY": {
+      "type": "NORMATIVE",
+      "statement": "Optimization priority is: CORRECTNESS > DETERMINISM > STABILITY > THROUGHPUT",
+      "MUST": [
+        "Never sacrifice correctness for speed",
+        "Never sacrifice determinism for throughput",
+        "Accept reduced throughput to ensure completion"
+      ],
+      "MUST_NOT": [
+        "Optimize for throughput at expense of correctness",
+        "Accept flaky correct results over stable slow results"
+      ]
+    },
+
+    "KERNEL_14__UTILIZATION_DETERMINATION": {
+      "type": "NORMATIVE",
+      "statement": "Utilization strategy MUST be determined BEFORE any processing",
+      "MUST": [
+        "Complete OPTIMAL_MODEL_UTILIZATION_ANALYSIS as step 0",
+        "Determine primary access pattern (A-H) before processing",
+        "Justify pattern selection with anti-patterns"
+      ],
+      "MUST_NOT": [
+        "Assume vector retrieval is the answer for all datasets",
+        "Skip utilization strategy determination"
+      ]
+    },
+
+    "KERNEL_15__ATOMIC_WRITES": {
+      "type": "NORMATIVE",
+      "statement": "All canonical artifacts and checkpoints MUST use atomic writes",
+      "MUST": [
+        "Write to temporary file, then rename to final destination",
+        "Ensure complete state on disk at all times"
+      ],
+      "MUST_NOT": [
+        "Allow partial state on disk",
+        "Write directly to canonical artifact paths"
+      ]
+    },
+
+    "KERNEL_16__REGIME_DECLARATION_AND_SEMANTIC_SPLIT_POLICY": {
+      "type": "NORMATIVE",
+      "_v4.23_addition": true,
+      "statement": "All FULL_BUILD runs MUST declare TOKEN_LENGTH_REGIME and DOCUMENT_CLASS. Semantic split thresholds are regime-scoped.",
+      "rationale": "SEC filings and similar legal/regulatory corpora do not conform to prose sentence models. Semantic coherence is preserved via clause/paragraph units, not literal sentence punctuation. This is NOT a relaxation of quality requirements - it is a correction of an invalid assumption about document structure.",
+      "MUST": [
+        "Declare TOKEN_LENGTH_REGIME (SHORT, MEDIUM, or LONG) based on token distribution",
+        "Declare DOCUMENT_CLASS (PROSE or LEGAL_REGULATORY) based on content structure",
+        "Apply regime-specific semantic split threshold",
+        "Emit semantic_split_analysis.json when using LEGAL_REGULATORY class"
+      ],
+      "MUST_NOT": [
+        "Proceed without regime declaration (HARD FAIL)",
+        "Apply prose thresholds to legal/regulatory documents",
+        "Claim LEGAL_REGULATORY class without evidence artifact",
+        "Override these thresholds without artifact justification"
+      ],
+      "TOKEN_LENGTH_REGIME_CLASSIFIER": {
+        "SHORT": {
+          "condition": "p95_token_length <= 256 AND max_token_length <= 512",
+          "batch_policy": "batch_size = 1300 (LOCKED)"
+        },
+        "MEDIUM": {
+          "condition": "256 < p95_token_length <= 400 AND max_token_length <= 512",
+          "batch_policy": "batch_size = calibrated (512-1024)"
+        },
+        "LONG": {
+          "condition": "p95_token_length > 400 OR max_token_length > 512",
+          "batch_policy": "batch_size = calibrated (32-256)"
+        }
+      },
+      "DOCUMENT_CLASS_DEFINITIONS": {
+        "PROSE": {
+          "description": "Standard text with sentence structure (news, books, articles, Q&A, forums)",
+          "semantic_unit": "sentence",
+          "detection_signals": ["Period-terminated sentences", "Paragraph structure", "Narrative flow", "Question-answer pairs"]
+        },
+        "LEGAL_REGULATORY": {
+          "description": "Legal, regulatory, or formal documents (SEC filings, contracts, legislation, compliance docs, court opinions)",
+          "semantic_unit": "clause / paragraph / list item",
+          "detection_signals": ["Numbered sections", "Semicolon-delimited clauses", "Formal headers", "Cross-references", "Legal boilerplate", "Defined terms"]
+        }
+      },
+      "SEMANTIC_SPLIT_THRESHOLDS": {
+        "PROSE": {
+          "MAX_MID_SEMANTIC_UNIT_SPLIT_PERCENT": 5,
+          "MAX_MID_WORD_BREAK_PERCENT": 1,
+          "semantic_unit": "sentence",
+          "rationale": "Prose has clear sentence boundaries. 5% allows for edge cases (embedded tables, lists)."
+        },
+        "LEGAL_REGULATORY": {
+          "MAX_MID_SEMANTIC_UNIT_SPLIT_PERCENT": 10,
+          "MAX_MID_WORD_BREAK_PERCENT": 1,
+          "semantic_unit": "clause / paragraph / list item",
+          "rationale": "Legal documents have irregular structure (long clauses, nested lists, dense paragraphs). 10% accommodates structural reality while maintaining semantic coherence."
+        }
+      },
+      "EVIDENCE_ARTIFACT_REQUIREMENT": {
+        "artifact_name": "semantic_split_analysis.json",
+        "required_when": "DOCUMENT_CLASS == LEGAL_REGULATORY",
+        "required_fields": [
+          "dataset_id",
+          "dataset_class (must be LEGAL_REGULATORY)",
+          "document_structure_characteristics",
+          "threshold_selection_justification",
+          "observed_split_distribution",
+          "sample_splits_with_context (3-5 examples)"
+        ]
+      }
+    }
+  },
+
+  "SECTION_B__AUTHORITY_AND_PRECEDENCE": {
+    "_section_purpose": "Defines what rules override others and how conflicts are resolved",
+    "_rule_type": "NORMATIVE - Defines binding precedence",
+
+    "PRECEDENCE_ORDER": {
+      "type": "NORMATIVE",
+      "levels": [
+        {"rank": 1, "source": "PROTOCOL_KERNEL (Section A)", "authority": "ABSOLUTE - Cannot be overridden"},
+        {"rank": 2, "source": "EXECUTION_CONSTRAINTS (Section C)", "authority": "MANDATORY - Waiver requires formal artifact"},
+        {"rank": 3, "source": "ENVIRONMENT_REFERENCES (Section D)", "authority": "ADVISORY - Adapt to actual hardware"},
+        {"rank": 4, "source": "EXPLANATORY_NOTES (Section E)", "authority": "INFORMATIONAL - No enforcement"}
+      ]
+    },
+
+    "VERSION_SUPERSESSION": {
+      "type": "NORMATIVE",
+      "statement": "Later protocol versions supersede earlier versions",
+      "current_supersessions": {
+        "ANTI_SABOTAGE_LAW": "DELETED in v4.9 - contradicted calibration-based approach",
+        "MISLEADING_PROJECTION_GUARD.override_mechanism": "SUPERSEDED by PROJECTION_OVERRIDE_POLICY in v4.15",
+        "SENTENCE_BOUNDARY_CHUNKING.literal_interpretation": "SUPERSEDED by SEMANTIC_BOUNDARY_CHUNKING in v4.23 - 'sentence' was a proxy for semantic unit"
+      }
+    }
+  },
+
+  "SECTION_C__EXECUTION_CONSTRAINTS": {
+    "_section_purpose": "GPU, storage, batching, atomicity, and pipeline constraints",
+    "_rule_type": "MIX - Normative constraints with descriptive parameters",
+
+    "REGIME_SCOPED_SEMANTIC_SPLIT_CONSTRAINTS": {
+      "type": "NORMATIVE",
+      "_v4.23_addition": true,
+      "statement": "Semantic split thresholds are selected based on DOCUMENT_CLASS, not globally hardcoded",
+      "thresholds": {
+        "PROSE": {
+          "MAX_MID_SEMANTIC_UNIT_SPLIT_PERCENT": 5,
+          "MAX_MID_WORD_BREAK_PERCENT": 1,
+          "semantic_unit": "sentence"
+        },
+        "LEGAL_REGULATORY": {
+          "MAX_MID_SEMANTIC_UNIT_SPLIT_PERCENT": 10,
+          "MAX_MID_WORD_BREAK_PERCENT": 1,
+          "semantic_unit": "clause / paragraph / list item"
+        }
+      },
+      "enforcement": {
+        "missing_declaration": "HARD FAIL - TOKEN_LENGTH_REGIME and DOCUMENT_CLASS must be declared",
+        "threshold_exceeded": "ABORT - quality gate failure, cannot proceed",
+        "missing_artifact": "HARD FAIL - semantic_split_analysis.json required for LEGAL_REGULATORY"
+      }
+    },
+
+    "TOKEN_LENGTH_REGIME_BATCH_POLICY": {
+      "type": "NORMATIVE",
+      "_v4.23_addition": true,
+      "statement": "batch_size selection is regime-dependent, not globally fixed",
+      "regimes": {
+        "REGIME_SHORT": {"batch_size": 1300, "status": "LOCKED"},
+        "REGIME_MEDIUM": {"batch_size": "512-1024", "status": "CALIBRATED", "artifact": "batch_calibration.json"},
+        "REGIME_LONG": {"batch_size": "32-256", "status": "CALIBRATED", "artifact": "batch_calibration.json"}
+      }
+    },
+
+    "GPU_CONSTRAINTS": {
+      "type": "NORMATIVE",
+      "vram_per_worker_gb": {"min": 1, "max": 3},
+      "batch_size_policy": "Regime-dependent (see TOKEN_LENGTH_REGIME_BATCH_POLICY)",
+      "precision": "FP16",
+      "oom_handling": {
+        "action": "reduce batch_size by 50%, retry",
+        "floor": 32,
+        "is_mishandling": true,
+        "minimum_rating": "YELLOW"
+      }
+    }
+  },
+
+  "SECTION_E__EXPLANATORY_NOTES": {
+    "_section_purpose": "Non-binding rationale and context for rules",
+    "_rule_type": "DESCRIPTIVE - Informational only",
+
+    "v4.23_SEMANTIC_COHERENCE_RATIONALE": {
+      "type": "DESCRIPTIVE",
+      "statement": "Sentence integrity was always a PROXY for semantic coherence, not a literal punctuation rule.",
+      "problem_identified": "SEC 10-K filings and similar legal documents do not conform to prose sentence models. They use numbered clauses, semicolon-delimited lists, and dense paragraphs without clear sentence boundaries.",
+      "solution": "Define 'semantic unit' as the appropriate boundary for the document class. For prose, this is a sentence. For legal/regulatory documents, this is a clause, paragraph, or list item.",
+      "no_dilution_guarantee": {
+        "statement": "This change does NOT weaken quality requirements",
+        "evidence": [
+          "Semantic coherence requirement is PRESERVED",
+          "Mid-word break threshold (1%) is UNCHANGED",
+          "Only the semantic unit definition is corrected for document type",
+          "LEGAL_REGULATORY class requires evidence artifact",
+          "Threshold selection must be justified with observed data"
+        ]
+      },
+      "incident_evidence": {
+        "WinterForest_SEC_filings": {
+          "observed_split_rate": "4.79%",
+          "previous_threshold": "1% (incorrectly applied prose threshold)",
+          "failure_mode": "Valid long legal clauses split at token boundary",
+          "corrected_threshold": "10% for LEGAL_REGULATORY class",
+          "outcome": "Build unblocked, semantic coherence preserved"
+        }
+      }
+    }
+  },
+
+  "SECTION_G__VERSIONING_AND_CHANGE_POLICY": {
+    "_section_purpose": "Protocol version history and change management",
+    "_rule_type": "MIX - Descriptive history, normative change policy",
+
+    "CURRENT_VERSION": {
+      "type": "DESCRIPTIVE",
+      "version": "4.23-DRAFT",
+      "generated": "2026-01-10",
+      "version_note": "REGIME_SCOPED_SEMANTIC_SPLIT_POLICY: Adds KERNEL_16 for regime and document class declaration. Semantic split thresholds: PROSE=5%, LEGAL_REGULATORY=10%. Required semantic_split_analysis.json for legal documents."
+    },
+
+    "VERSION_HISTORY": {
+      "type": "DESCRIPTIVE",
+      "versions": {
+        "4.23-DRAFT": "REGIME_SCOPED_SEMANTIC_SPLIT_POLICY: Added KERNEL_16, DOCUMENT_CLASS declaration. Renamed SENTENCE_BOUNDARY_CHUNKING to SEMANTIC_BOUNDARY_CHUNKING. Thresholds: PROSE 5%, LEGAL_REGULATORY 10%. Required semantic_split_analysis.json artifact.",
+        "4.22": "DRY_RUN_ONLY_ENFORCEMENT: FULL_BUILD_FROM_RAW forbidden without DRY_RUN_PASS.",
+        "4.21": "PHASE_2_INDEX_BUILD_HAZARD: Monolithic RAM loading forbidden for >= 20M vectors.",
+        "4.20": "PRE_BUILD_THROUGHPUT_PROJECTION_GATE and DATASET_ARCHETYPE_PRIORS."
+      }
+    },
+
+    "QUALIFYING_DATASETS": {
+      "type": "DESCRIPTIVE",
+      "WINTERFORESTSTUMP": {
+        "rules_triggered": ["DRY_RUN_ONLY_ENFORCEMENT", "REGIME_SCOPED_SEMANTIC_SPLIT_POLICY"],
+        "document_class": "LEGAL_REGULATORY",
+        "token_length_regime": "LONG",
+        "semantic_split_threshold": "10%",
+        "observed_split_rate": "4.79%",
+        "status": "UNBLOCKED under v4.23"
+      }
+    }
+  },
+
+  "APPENDIX__SEMANTIC_SPLIT_ANALYSIS_SCHEMA": {
+    "_section_purpose": "Schema for required semantic_split_analysis.json artifact",
+    "_rule_type": "NORMATIVE - Required fields",
+
+    "required_when": "DOCUMENT_CLASS == LEGAL_REGULATORY",
+    "required_fields": {
+      "dataset_id": "string",
+      "dataset_class": "LEGAL_REGULATORY",
+      "document_structure_characteristics": ["list of structural signals"],
+      "threshold_selection_justification": "string explaining why 10% is appropriate",
+      "observed_split_distribution": {
+        "mid_semantic_unit_split_percent": "number <= 10",
+        "mid_word_break_percent": "number <= 1",
+        "total_chunks_sampled": "number"
+      },
+      "sample_splits_with_context": [
+        {"chunk_before": "...", "chunk_after": "...", "split_type": "clause|paragraph|list"}
+      ]
+    }
+  }
+}
