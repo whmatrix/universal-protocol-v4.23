@@ -1,3 +1,7 @@
+> **Status: CANONICAL_SPEC (Universal Protocol v4.23+)**
+>
+> This is the authoritative specification for RAG deliverables, audit contracts, and quality gates.
+
 # Universal Protocol v4.23 — RAG Deliverables & Audit Artifacts
 
 This repository is the "start here" surface for how I operate under Universal Protocol v4.23:
@@ -35,10 +39,12 @@ Examples:
 - RAG-ready indexing example:
   [portfolio_artifacts/Portfolio_02_RAG_Ready_Semantic_Indexing.pdf](portfolio_artifacts/Portfolio_02_RAG_Ready_Semantic_Indexing.pdf)
 
-## Implementation lineage (code portfolio)
+## Implementation Lineage
 
-- Current production-style pipeline repo: [semantic-indexing-batch-02](https://github.com/whmatrix/semantic-indexing-batch-02)
-- Earlier foundation: [semantic-indexing-batch-01](https://github.com/whmatrix/semantic-indexing-batch-01)
+| Role | Repository | Status |
+|------|------------|--------|
+| **Production** | [semantic-indexing-batch-02](https://github.com/whmatrix/semantic-indexing-batch-02) | Active (8.3M+ vectors) |
+| **Foundational** | [semantic-indexing-batch-01](https://github.com/whmatrix/semantic-indexing-batch-01) | Superseded |
 
 ## Protocol source
 
