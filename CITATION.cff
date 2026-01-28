@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this protocol in your RAG project, please cite as below."
+authors:
+  - family-names: "Matrix"
+    given-names: "Wade"
+title: "Universal Protocol v4.23 for RAG-Ready Semantic Indexing"
+version: 4.23.0
+date-released: 2026-01-17
+url: "https://github.com/whmatrix/universal-protocol-v4.23"
+type: software
+keywords:
+  - rag
+  - semantic-indexing
+  - protocol
+  - validation
+license: Apache-2.0
