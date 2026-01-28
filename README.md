@@ -1,3 +1,4 @@
+> **Author:** John Mitchell (@whmatrix)
 > **Status: CANONICAL_SPEC (Universal Protocol v4.23+)**
 >
 > This is the authoritative specification for RAG deliverables, audit contracts, and quality gates.
