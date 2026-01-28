@@ -1,6 +1,9 @@
 > **Author:** John Mitchell (@whmatrix)
-> **Status: CANONICAL_SPEC (Universal Protocol v4.23+)**
->
+> **Status:** ACTIVE
+> **Audience:** Protocol Implementers / Engineers
+> **Environment:** No code to run (specification only)
+> **Fast Path:** Read the deliverable contract below
+
 > This is the authoritative specification for RAG deliverables, audit contracts, and quality gates.
 
 # Universal Protocol v4.23 — RAG Deliverables & Audit Artifacts
