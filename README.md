@@ -46,6 +46,12 @@ Examples:
 | **Production** | [semantic-indexing-batch-02](https://github.com/whmatrix/semantic-indexing-batch-02) | Active (8.3M+ vectors) |
 | **Foundational** | [semantic-indexing-batch-01](https://github.com/whmatrix/semantic-indexing-batch-01) | Superseded |
 
+## Limitations & Non-Claims
+
+This protocol defines structure and deliverable contracts, not retrieval quality guarantees. Compliance with this protocol does not imply fitness for any specific application. Retrieval quality, relevance, and domain suitability require independent evaluation.
+
+---
+
 ## Protocol source
 
 - [protocol/UNIVERSAL_PROTOCOL_v4.23_DRAFT.json](protocol/UNIVERSAL_PROTOCOL_v4.23_DRAFT.json)
